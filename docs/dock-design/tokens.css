@@ -1,0 +1,84 @@
+/* Agent notch dock tokens
+   --src-ref  = measured from alexmichael-dock.mp4 (1416x720 @ 60fps)
+   --src-ody  = Odysseus (odysseus-chat-stealth / composer-cleanup)
+   --src-est  = estimated (marked in SPEC.md)
+*/
+@font-face {
+  font-family: "Fira Code";
+  src: url("fonts/FiraCode-Variable.ttf") format("truetype");
+  font-weight: 300 700;
+  font-style: normal;
+  font-display: block;
+}
+
+:root {
+  /* Odysseus color */
+  --ody-bg: #0d1717;
+  --ody-text: #aadcef;
+  --ody-heading: #8bd9da;
+  --ody-teal: #8bd9da;
+  --ody-teal-mid: #2bb3b1;
+  --ody-teal-deep: #0f6b68;
+  --ody-bullet: #86b1e7;
+  --ody-muted: #46575e;
+  --ody-muted-2: #7495a1;
+  --ody-yellow: #D8CB03;
+  --ody-yellow-soft: #f0e46a;
+  --ody-user: #162022;
+  --ody-rule: rgba(139, 217, 218, 0.55);
+  --ody-glass: rgba(12, 20, 12, 0.58);
+  --ody-glass-heavy: rgba(12, 20, 12, 0.82);
+  --ody-glass-border: rgba(139, 217, 218, 0.14);
+  --ody-glass-fallback: rgba(11, 15, 11, 0.94);
+  --ody-scrim: rgba(5, 10, 10, 0.6);
+  --ody-warn: #e8a13a;
+  --ody-deny: #c45b5b;
+  --ody-mic: #8199f5;
+
+  --font: "Fira Code", "Fira Mono", ui-monospace, monospace;
+  --fs-body: 13.5px;
+  --lh-body: 21px;
+  --fs-title: 14.5px;
+  --fs-meta: 11px;
+  --fs-metric: 28px;
+  --fs-label: 12px;
+
+  /* Reference layout (1 video-px ≈ 1 CSS px) */
+  --collapsed-w: 10px;
+  --collapsed-h: 196px;
+  --collapsed-r: 5px;
+  --rail-w: 42px;
+  --rail-h: 285px;
+  --rail-r: 21px;
+  --avatar: 24px;
+  --avatar-pitch: 39px;
+  --avatar-ring: 2px;
+  --status-dot: 8px;
+  --chat-w: 428px;
+  --chat-h: 601px;
+  --chat-r: 16px;
+  --gap: 19px;
+  --header-h: 36px;
+  --composer-h: 38px;
+  --composer-inset: 12px;
+  --composer-r: 20px;
+  --pad-x: 16px;
+
+  --ease-snappy: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-pop: cubic-bezier(0.34, 1.22, 0.64, 1);
+  --dur-rail: 100ms;
+  --dur-chat: 280ms;
+  --dur-send: 180ms;
+  --dur-voice: 400ms;
+}
+
+.glass {
+  background: var(--ody-glass-heavy);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--ody-glass-border);
+  box-shadow: inset 0 1px 0 rgba(220, 255, 250, 0.12), 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass { background: var(--ody-glass-fallback); }
+}
