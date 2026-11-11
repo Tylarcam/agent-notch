@@ -56,6 +56,9 @@ public sealed class AgentSession
     // set by ApprovalStore.Attach when a matching marker file exists
     public ApprovalRequest? PendingApproval { get; set; }
 
+    /// <summary>Filename stem under pending/ (e.g. Cursor conversation_id).</summary>
+    public string? PendingMarkerId { get; set; }
+
     // process alive (from discovery, never mtime)
     public bool IsLive { get; set; }
 

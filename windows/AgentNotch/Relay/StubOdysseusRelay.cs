@@ -15,7 +15,10 @@ internal sealed class StubOdysseusRelay : IOdysseusRelay
 
     public StubOdysseusRelay(bool demoStream) => _demoStream = demoStream;
 
-    public async Task SendUserMessageAsync(string text, CancellationToken ct = default)
+    public Task<string?> UploadFileAsync(string fileName, byte[] data, string mimeType, CancellationToken ct = default) =>
+        Task.FromResult<string?>(null);
+
+    public async Task SendUserMessageAsync(string text, IReadOnlyList<string>? attachmentIds = null, CancellationToken ct = default)
     {
         lock (_gate) _transcript.Add(new ChatMessage("user", text, DateTime.UtcNow));
         TranscriptChanged?.Invoke();

@@ -225,4 +225,10 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool GetWindowRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern bool PrintWindow(nint hwnd, nint hdcBlt, uint nFlags);
 }

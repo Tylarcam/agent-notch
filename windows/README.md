@@ -84,8 +84,26 @@ dotnet run
   (`%USERPROFILE%\.config\agent-notch\relay.json` with `{ "baseUrl": "http://127.0.0.1:7000" }`
   or env `AGENT_NOTCH_RELAY_URL`). Otherwise messages stay local with a quiet
   “relay offline” label.
+- **Phase 2 relay auth:** Odysseus requires `Authorization: Bearer …` on chat,
+  upload, and session APIs. Set **`ODYSSEUS_API_TOKEN`** (or `AN_ODYSSEUS_API_TOKEN`)
+  in the process environment — never put tokens in `relay.json`. If the token is
+  missing, the dock shows **relay needs token**.
+- **`relay.json`** may also include non-secret fields:
+  - `"sessionId"` — reused dock chat session (created automatically on first send)
+  - `"aetherBaseUrl"` — default `http://127.0.0.1:3000` (overridable via `AGENT_NOTCH_AETHER_URL`)
+- **Mic (press-to-talk):** Hold the mic button in the composer; release to transcribe
+  via local Aether (`/api/transcribe-groq`, fallback `/api/transcribe-whisper`).
+  Text fills the input only (no auto-send). Shows **Aether offline** when down.
+- **`+` attach:** Captures the current non–Agent Notch foreground window (PNG),
+  shows a thumbnail chip, uploads on send (`POST /api/upload`), and passes attachment
+  ids into `/api/chat_stream`.
 - Claude permission prompts still flow through `hooks/notify.ps1` → approval
   cards in the agent’s chat thread (panel quick-approve remains as fallback).
+- **Cursor approvals (opt-in):** Install `hooks/cursor-permission.ps1` via your own
+  `%USERPROFILE%\.cursor\hooks.json` (the app does not write that file). Approve/Deny
+  in the dock writes `pending/<id>.decision.json` for the hook to read. Built-in MCP
+  allowlist prompts that ignore hook `allow` may still show in Cursor itself — install
+  the hook for shell/MCP/file prompts covered by the events below.
 
 **Preview / screenshots** (no live sessions required):
 
@@ -96,6 +114,51 @@ dotnet run -- --dock-preview
 
 Writes PNGs under `docs/screens/dock/` (`01-collapsed` … `05-approval-pending`)
 via off-screen render, then exits.
+
+**Relay smoke test** (no UI, uses `relay.json` + `ODYSSEUS_API_TOKEN`):
+
+```powershell
+dotnet run --project windows/AgentNotch/AgentNotch.csproj -- --relay-ping
+```
+
+### Cursor hooks opt-in (`hooks/cursor-permission.ps1`)
+
+Add to `%USERPROFILE%\.cursor\hooks.json` (adjust the path to this repo):
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\tylar\\code\\agent-notch\\windows\\AgentNotch\\hooks\\cursor-permission.ps1\""
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\tylar\\code\\agent-notch\\windows\\AgentNotch\\hooks\\cursor-permission.ps1\""
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\tylar\\code\\agent-notch\\windows\\AgentNotch\\hooks\\cursor-permission.ps1\""
+      }
+    ],
+    "preToolUse": [
+      {
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\tylar\\code\\agent-notch\\windows\\AgentNotch\\hooks\\cursor-permission.ps1\""
+      }
+    ]
+  }
+}
+```
+
+### Phase 2 relay round-trip (2026-03-11)
+
+`dotnet run -- --relay-ping` against `http://127.0.0.1:7000` with env token:
+**success** — health OK, session created (model picked from `/api/models` when
+`default-chat` is empty), streamed assistant reply received (sanitized excerpt
+logged to console; no headers or tokens).
 
 ## Publish a standalone build
 

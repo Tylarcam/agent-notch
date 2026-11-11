@@ -3,6 +3,7 @@ using System.Windows;
 using AgentNotch.Discovery;
 using AgentNotch.Dock;
 using AgentNotch.Models;
+using AgentNotch.Relay;
 
 namespace AgentNotch;
 
@@ -20,6 +21,11 @@ internal static class Program
         if (args.Contains("--dock-preview"))
         {
             Environment.Exit(DockPreviewRunner.Run());
+            return;
+        }
+        if (args.Contains("--relay-ping"))
+        {
+            Environment.Exit(RelayRoundTripRunner.RunAsync().GetAwaiter().GetResult());
             return;
         }
         if (args.Contains("--focus"))

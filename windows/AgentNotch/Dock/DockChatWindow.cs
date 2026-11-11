@@ -1,8 +1,11 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
+using AgentNotch.Aether;
 using AgentNotch.Models;
 using AgentNotch.Relay;
 
@@ -28,6 +31,11 @@ internal sealed class DockChatWindow : DockOverlayWindow
     private FrameworkElement? _typingRow;
     private ApprovalCardState _approvalState = ApprovalCardState.Pending;
     private Border? _approvalCard;
+    private readonly AetherClient _aether = new();
+    private readonly MicRecorder _mic = new();
+    private byte[]? _pendingScreenshot;
+    private Border? _attachChip;
+    private bool _micRecording;
 
     public event Action? CloseRequested;
     public event Action<AgentSession, char>? ApprovalPressed;
@@ -113,6 +121,7 @@ internal sealed class DockChatWindow : DockOverlayWindow
         _plus.BorderBrush = new SolidColorBrush(Color.FromArgb(90, DockTokens.Yellow.R, DockTokens.Yellow.G, DockTokens.Yellow.B));
         _plus.BorderThickness = new Thickness(1);
         _plus.Cursor = Cursors.Hand;
+        _plus.Click += (_, _) => CaptureAttachment();
 
         var pill = new Border
         {
@@ -137,6 +146,8 @@ internal sealed class DockChatWindow : DockOverlayWindow
         _sendOrMic.FontFamily = DockFonts.Family;
         _sendOrMic.Cursor = Cursors.Hand;
         _sendOrMic.Click += (_, _) => _ = SendAsync();
+        _sendOrMic.PreviewMouseLeftButtonDown += OnSendMicDown;
+        _sendOrMic.PreviewMouseLeftButtonUp += (_, _) => _ = OnSendMicUpAsync();
         UpdateSendMic();
 
         Grid.SetColumn(_plus, 0);
@@ -231,15 +242,154 @@ internal sealed class DockChatWindow : DockOverlayWindow
         });
     }
 
+    private void OnSendMicDown(object sender, MouseButtonEventArgs e)
+    {
+        var raw = _input.Text.Trim();
+        var hasText = !string.IsNullOrWhiteSpace(raw) && (_input.Tag is not string ph || raw != ph);
+        if (hasText) return;
+        _micRecording = true;
+        _mic.Start();
+        _sendOrMic.Background = new SolidColorBrush(DockTokens.Teal);
+        _sendOrMic.Foreground = new SolidColorBrush(DockTokens.Bg);
+        e.Handled = true;
+    }
+
+    private async Task OnSendMicUpAsync()
+    {
+        if (!_micRecording) return;
+        _micRecording = false;
+        UpdateSendMic();
+        var wav = _mic.Stop();
+        if (wav is null) return;
+        try
+        {
+            var (ok, result) = await _aether.TranscribeFileAsync(wav).ConfigureAwait(true);
+            if (ok && !string.IsNullOrWhiteSpace(result))
+            {
+                if (_input.Tag is string ph && _input.Text == ph)
+                {
+                    _input.Text = "";
+                    _input.Foreground = new SolidColorBrush(DockTokens.Text);
+                }
+                _input.Text = (_input.Text + " " + result).Trim();
+                UpdateSendMic();
+            }
+            else if (!ok)
+            {
+                if (_input.Tag is string ph && _input.Text == ph)
+                {
+                    _input.Text = result;
+                    _input.Foreground = new SolidColorBrush(DockTokens.Muted2);
+                }
+                else
+                    _input.Text = (_input.Text + " " + result).Trim();
+            }
+        }
+        finally
+        {
+            try { File.Delete(wav); } catch { /* ignore */ }
+        }
+    }
+
+    private void CaptureAttachment()
+    {
+        _pendingScreenshot = ForegroundCapture.CaptureForAttach();
+        RefreshAttachChip();
+    }
+
+    private void RefreshAttachChip()
+    {
+        if (_attachChip is not null)
+        {
+            _composer.Children.Remove(_attachChip);
+            _attachChip = null;
+        }
+        if (_pendingScreenshot is null || _pendingScreenshot.Length == 0) return;
+
+        var img = new Image
+        {
+            Width = 36,
+            Height = 24,
+            Stretch = Stretch.UniformToFill,
+            Source = LoadThumb(_pendingScreenshot),
+        };
+        var close = new Button
+        {
+            Content = "×",
+            Width = 20,
+            Height = 20,
+            Margin = new Thickness(4, 0, 0, 0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Foreground = new SolidColorBrush(DockTokens.Muted),
+            Cursor = Cursors.Hand,
+        };
+        close.Click += (_, _) =>
+        {
+            _pendingScreenshot = null;
+            RefreshAttachChip();
+        };
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(img);
+        row.Children.Add(close);
+        _attachChip = new Border
+        {
+            Background = new SolidColorBrush(DockTokens.GlassBase),
+            BorderBrush = new SolidColorBrush(DockTokens.GlassBorder),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(6, 4, 6, 4),
+            Margin = new Thickness(0, 4, 0, 0),
+            Child = row,
+        };
+        Grid.SetColumn(_attachChip, 1);
+        Grid.SetRow(_attachChip, 1);
+        if (_composer.RowDefinitions.Count < 2)
+            _composer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        _composer.Children.Add(_attachChip);
+    }
+
+    private static BitmapImage LoadThumb(byte[] png)
+    {
+        var img = new BitmapImage();
+        using var ms = new MemoryStream(png);
+        img.BeginInit();
+        img.StreamSource = ms;
+        img.CacheOption = BitmapCacheOption.OnLoad;
+        img.EndInit();
+        img.Freeze();
+        return img;
+    }
+
     private async Task SendAsync()
     {
         var raw = _input.Text.Trim();
-        if (_input.Tag is string ph && raw == ph) return;
+        if (_input.Tag is string ph && raw == ph) raw = "";
         var text = raw;
-        if (string.IsNullOrEmpty(text) || _relay is null) return;
+        var hasShot = _pendingScreenshot is { Length: > 0 };
+        if (string.IsNullOrEmpty(text) && !hasShot) return;
+        if (_relay is null) return;
+
         _input.Text = "";
         UpdateSendMic();
-        var bubble = UserBubble(text);
+
+        IReadOnlyList<string>? attIds = null;
+        var displayText = text;
+        if (hasShot)
+        {
+            displayText = string.IsNullOrEmpty(text) ? "[screenshot attached]" : text;
+            if (_relay.IsConnected)
+            {
+                var id = await _relay.UploadFileAsync("dock-capture.png", _pendingScreenshot!, "image/png");
+                if (id is not null) attIds = [id];
+                else displayText += " (upload failed — kept locally)";
+            }
+            else
+                displayText += " (relay offline)";
+            _pendingScreenshot = null;
+            RefreshAttachChip();
+        }
+        var bubble = UserBubble(displayText);
         _messages.Children.Add(bubble);
         var pop = new DoubleAnimation(0.85, 1, TimeSpan.FromMilliseconds(DockTokens.SendPopMs))
         {
@@ -255,7 +405,7 @@ internal sealed class DockChatWindow : DockOverlayWindow
 
         try
         {
-            await _relay.SendUserMessageAsync(text);
+            await _relay.SendUserMessageAsync(text, attIds);
         }
         finally
         {

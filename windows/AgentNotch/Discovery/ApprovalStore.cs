@@ -4,11 +4,9 @@ using AgentNotch.Models;
 
 namespace AgentNotch.Discovery;
 
-/// <summary>Reads pending-approval markers written by the opt-in Notification
-/// hook (hooks/notify.ps1) and attaches them to matching sessions. A marker
-/// is cleared once the transcript advances past its timestamp (proof the
-/// prompt was answered — from the terminal, or via SendApprovalKey), the
-/// session's process exits, or it goes stale.</summary>
+/// <summary>Reads pending-approval markers from Claude (hooks/notify.ps1) and
+/// Cursor (hooks/cursor-permission.ps1). Cursor Approve/Deny writes a sibling
+/// <c>.decision.json</c> file; Claude still uses SendApprovalKey keystrokes.</summary>
 public static class ApprovalStore
 {
     private static readonly string Dir = Path.Combine(
@@ -22,44 +20,107 @@ public static class ApprovalStore
         var byId = new Dictionary<string, AgentSession>(StringComparer.OrdinalIgnoreCase);
         foreach (var s in sessions)
         {
-            var id = SessionId(s);
-            if (!string.IsNullOrEmpty(id)) byId[id] = s;
+            foreach (var id in MarkerIds(s))
+            {
+                if (!string.IsNullOrEmpty(id)) byId[id] = s;
+            }
         }
 
         foreach (var file in Directory.EnumerateFiles(Dir, "*.json"))
         {
-            var sessionId = Path.GetFileNameWithoutExtension(file);
+            if (file.EndsWith(".decision.json", StringComparison.OrdinalIgnoreCase)) continue;
+
+            var markerId = Path.GetFileNameWithoutExtension(file);
             var req = TryRead(file);
             if (req is null) { TryDelete(file); continue; }
 
-            if (!byId.TryGetValue(sessionId, out var session))
+            AgentSession? session = null;
+            if (!byId.TryGetValue(markerId, out session))
             {
-                if (DateTime.UtcNow - req.RequestedAt > StaleAfter) TryDelete(file);
+                var jsonSid = TryReadSessionId(file);
+                if (jsonSid is not null) byId.TryGetValue(jsonSid, out session);
+            }
+            if (session is null)
+            {
+                session = sessions.FirstOrDefault(s => s.Kind == AgentKind.Cursor && (s.IsLive || s.AnyLive));
+                if (session is null)
+                {
+                    if (DateTime.UtcNow - req.RequestedAt > StaleAfter) TryDelete(file);
+                    continue;
+                }
+            }
+
+            var resolved = session.Kind != AgentKind.Cursor &&
+                (!session.AnyLive ||
+                (session.LastActivity is { } act && act > req.RequestedAt) ||
+                DateTime.UtcNow - req.RequestedAt > StaleAfter);
+
+            if (resolved && session.Kind != AgentKind.Cursor) { TryDelete(file); continue; }
+
+            if (session.Kind == AgentKind.Cursor && DateTime.UtcNow - req.RequestedAt > StaleAfter)
+            {
+                TryDelete(file);
                 continue;
             }
 
-            // resolved (from the terminal or by us) once the transcript moved on
-            var resolved = !session.AnyLive ||
-                (session.LastActivity is { } act && act > req.RequestedAt) ||
-                DateTime.UtcNow - req.RequestedAt > StaleAfter;
-
-            if (resolved) { TryDelete(file); continue; }
-
             session.PendingApproval = req;
+            session.PendingMarkerId = markerId;
         }
     }
 
-    /// <summary>Called right after a quick-approve button fires, so the
-    /// banner doesn't linger until the next poll notices the transcript moved.</summary>
+    public static void WriteDecision(AgentSession session, bool allow)
+    {
+        Directory.CreateDirectory(Dir);
+        var id = session.PendingMarkerId ?? PendingMarkerId(session);
+        if (string.IsNullOrEmpty(id)) return;
+        var payload = JsonSerializer.Serialize(new
+        {
+            decision = allow ? "allow" : "deny",
+            timestamp = DateTimeOffset.UtcNow.ToString("o"),
+        });
+        var path = Path.Combine(Dir, $"{id}.decision.json");
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, payload);
+        File.Move(tmp, path, overwrite: true);
+    }
+
     public static void Clear(AgentSession session)
     {
-        var id = SessionId(session);
+        var id = session.PendingMarkerId ?? PendingMarkerId(session);
         if (string.IsNullOrEmpty(id)) return;
         TryDelete(Path.Combine(Dir, $"{id}.json"));
     }
 
-    private static string SessionId(AgentSession s) =>
-        s.Kind == AgentKind.Claude ? Path.GetFileNameWithoutExtension(s.Id) : s.ThreadId;
+    private static IEnumerable<string> MarkerIds(AgentSession s)
+    {
+        yield return PendingMarkerId(s);
+        if (s.Kind == AgentKind.Cursor && s.Id.Contains(Path.DirectorySeparatorChar))
+        {
+            var bn = Path.GetFileNameWithoutExtension(s.Id);
+            if (!string.IsNullOrEmpty(bn)) yield return bn;
+        }
+    }
+
+    private static string PendingMarkerId(AgentSession s) => s.Kind switch
+    {
+        AgentKind.Claude => Path.GetFileNameWithoutExtension(s.Id),
+        AgentKind.Cursor => !string.IsNullOrEmpty(s.ThreadId)
+            ? s.ThreadId
+            : Path.GetFileNameWithoutExtension(s.Id),
+        _ => s.ThreadId,
+    };
+
+    private static string? TryReadSessionId(string file)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(file));
+            if (doc.RootElement.TryGetProperty("sessionId", out var sid) && sid.ValueKind == JsonValueKind.String)
+                return sid.GetString();
+        }
+        catch { /* ignore */ }
+        return null;
+    }
 
     private static ApprovalRequest? TryRead(string file)
     {
@@ -75,7 +136,6 @@ public static class ApprovalStore
         }
         catch
         {
-            // marker mid-write or corrupt — skip this poll, it'll be retried
             return null;
         }
     }
