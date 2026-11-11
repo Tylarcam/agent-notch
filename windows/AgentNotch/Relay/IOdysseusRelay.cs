@@ -7,7 +7,12 @@ internal interface IOdysseusRelay
     IReadOnlyList<ChatMessage> Transcript { get; }
     event Action? TranscriptChanged;
     event Action<string>? TokenReceived;
-    Task SendUserMessageAsync(string text, CancellationToken ct = default);
+
+    Task SendUserMessageAsync(string text, IReadOnlyList<string>? attachmentIds = null, CancellationToken ct = default);
+
+  /// <summary>Upload bytes to Odysseus; returns file id or null.</summary>
+    Task<string?> UploadFileAsync(string fileName, byte[] data, string mimeType, CancellationToken ct = default);
+
     void ClearTranscript();
 }
 

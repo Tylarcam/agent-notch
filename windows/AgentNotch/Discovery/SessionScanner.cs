@@ -169,6 +169,7 @@ public sealed partial class SessionScanner
                 outList.Add(new AgentSession
                 {
                     Id = file,
+                    ThreadId = Path.GetFileNameWithoutExtension(file),
                     Kind = AgentKind.Cursor,
                     Title = repo,
                     Snippet = info.Snippet,

@@ -5,3 +5,7 @@ windows/AgentNotch/obj/
 windows/AgentNotch/publish/
 windows/AgentNotch/.claude/
 docs/dock-design/composer-run.log
+
+.tmp-phase2-composer.log
+.tmp-phase2-verify/
+

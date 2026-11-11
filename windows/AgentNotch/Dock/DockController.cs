@@ -261,27 +261,26 @@ internal sealed class DockController
 
     public void SeedPreviewApproval()
     {
-        var claude = _sessions.FirstOrDefault(s => s.Kind == AgentKind.Claude)
+        var cursor = _sessions.FirstOrDefault(s => s.Kind == AgentKind.Cursor)
             ?? new AgentSession
             {
-                Id = "preview",
-                Kind = AgentKind.Claude,
-                Title = "preview",
+                Id = "cursor-preview",
+                ThreadId = "cursor-preview",
+                Kind = AgentKind.Cursor,
+                Title = "agent-notch",
                 LastModified = DateTime.UtcNow,
-                PendingApproval = new ApprovalRequest(
-                    "Allow Cursor to edit src/notch/Dock.tsx?",
-                    "edit",
-                    DateTime.UtcNow),
+                IsLive = true,
             };
-        claude.PendingApproval ??= new ApprovalRequest(
-            "Allow Claude Code to run npm test?",
-            "Bash",
+        cursor.PendingApproval ??= new ApprovalRequest(
+            "npm test -- --run",
+            "Shell",
             DateTime.UtcNow);
-        if (!_sessions.Contains(claude)) _sessions.Add(claude);
+        cursor.PendingMarkerId ??= "cursor-preview";
+        if (!_sessions.Contains(cursor)) _sessions.Add(cursor);
         _pill.SetPulsing(true);
         UpdateSessions(_sessions);
-        var item = _railItems.FirstOrDefault(i => i.Kind == AgentKind.Claude) ?? _railItems[0];
+        var item = _railItems.FirstOrDefault(i => i.Kind == AgentKind.Cursor) ?? _railItems[0];
         ForceStateForPreview(DockSurfaceState.Chat, item.Id);
-        _chat.UpdateApprovalCard(claude.PendingApproval, claude.Kind.DisplayName());
+        _chat.UpdateApprovalCard(cursor.PendingApproval, cursor.Kind.DisplayName());
     }
 }

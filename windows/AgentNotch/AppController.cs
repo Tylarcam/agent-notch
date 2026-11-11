@@ -342,9 +342,13 @@ internal sealed class AppController
     /// to notice the transcript moved on.</summary>
     private void OnApprovalKeyPressed(AgentSession s, char digit)
     {
-        if (s.Pid is int pid) _ = Task.Run(() => ProcessDiscovery.SendApprovalKey(pid, digit));
+        if (s.Kind == AgentKind.Cursor)
+            ApprovalStore.WriteDecision(s, digit == '1');
+        else if (s.Pid is int pid)
+            _ = Task.Run(() => ProcessDiscovery.SendApprovalKey(pid, digit));
         ApprovalStore.Clear(s);
         s.PendingApproval = null;
+        s.PendingMarkerId = null;
         _panelWindow.SetSessions(_sessions);
     }
 
@@ -785,6 +789,7 @@ internal sealed class AppController
     /// <summary>Revisiting a terminal acknowledges finished agents — green clears.</summary>
     private void OnForegroundChanged(nint hWinEventHook, uint eventType, nint hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
+        Dock.ForegroundCapture.NoteForeground(hwnd);
         try
         {
             NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
