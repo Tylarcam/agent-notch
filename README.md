@@ -47,6 +47,12 @@ swiftc -O main.swift -o AgentNotch
 ./AgentNotch &
 ```
 
-- **Click** the indicator → open the panel. Click anywhere → close.
+- **Click** the indicator → open the panel. Click anywhere or press **Esc** → close.
 - To start at login: System Settings → General → Login Items → add `AgentNotch`.
 - Requires macOS 12+ (built and tested on a notched MacBook; on notchless displays it centers on a virtual notch).
+
+### Windows
+
+A separate C#/WPF port lives in [`windows/`](windows/) — see
+[`windows/README.md`](windows/README.md) for build, publish, and
+start-at-login instructions.

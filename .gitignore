@@ -1,2 +1,7 @@
-AgentNotch
+/AgentNotch
 .DS_Store
+windows/AgentNotch/bin/
+windows/AgentNotch/obj/
+windows/AgentNotch/publish/
+windows/AgentNotch/.claude/
+docs/dock-design/composer-run.log
